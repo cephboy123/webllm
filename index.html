@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cephboy AI (BSN-Flash)</title>
+  <title>Cephboy AI (Instant Cloud)</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
     h1 { font-size: 1.2rem; text-align: center; margin-bottom: 10px; color: #38bdf8; }
@@ -12,87 +12,83 @@
     .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; max-width: 85%; line-height: 1.4; word-wrap: break-word; }
     .user { background: #2563eb; align-self: flex-end; margin-left: auto; }
     .bot { background: #334155; align-self: flex-start; }
-    #input-form { display: flex; gap: 8px; }
+    #input-form { display: flex; gap: 8px; flex-direction: column; }
+    .row { display: flex; gap: 8px; }
     input { flex: 1; background: #1e293b; border: 1px solid #334155; color: #fff; padding: 12px; border-radius: 8px; outline: none; }
     button { background: #2563eb; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
-  <script type="module">
-    import { Wllama } from 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.1.3/esm/index.js';
+</head>
+<body>
+  <h1>Cephboy AI</h1>
+  <div id="status">Veuillez entrer votre clé API Groq ci-dessous.</div>
+  <div id="chat-box"></div>
+  <form id="input-form">
+    <input type="password" id="api-key" placeholder="Clé API Groq (gsk_...)" autocomplete="off">
+    <div class="row">
+      <input type="text" id="user-input" placeholder="Pose ta question..." autocomplete="off">
+      <button type="submit" id="send-btn">Envoyer</button>
+    </div>
+  </form>
 
-    const statusEl = document.getElementById('status');
+  <script>
     const chatBox = document.getElementById('chat-box');
     const inputEl = document.getElementById('user-input');
+    const apiKeyEl = document.getElementById('api-key');
     const sendBtn = document.getElementById('send-btn');
+    const statusEl = document.getElementById('status');
 
-    let wllama = null;
+    let history = [
+      { role: "system", content: "Tu es Cephboy AI, un assistant virtuel intelligent, poli et précis." }
+    ];
 
-    async function init() {
-      try {
-        statusEl.innerText = "Chargement du moteur Wllama...";
-        
-        const CONFIG_PATHS = {
-          'single-thread/wllama.wasm': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.1.3/esm/single-thread/wllama.wasm',
-          'multi-thread/wllama.wasm': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.1.3/esm/multi-thread/wllama.wasm',
-        };
-
-        wllama = new Wllama(CONFIG_PATHS);
-
-        statusEl.innerText = "Téléchargement du modèle BSN-Flash...";
-
-        await wllama.loadModelFromHF(
-          'Cephboy/BSN-Flash',
-          'bsn_flash_q4_k_m.gguf',
-          {
-            n_threads: 1,
-            progressCallback: ({ loaded, total }) => {
-              if (total && total > 0) {
-                const pct = Math.round((loaded / total) * 100);
-                statusEl.innerText = `Téléchargement du modèle : ${pct}% (986 MB)`;
-              } else {
-                const mb = (loaded / (1024 * 1024)).toFixed(1);
-                statusEl.innerText = `Téléchargement : ${mb} MB / 986 MB`;
-              }
-            }
-          }
-        );
-
-        statusEl.innerText = "Modèle prêt ! Pose ta question.";
-        statusEl.style.borderColor = "#22c55e";
-        inputEl.disabled = false;
-        sendBtn.disabled = false;
-      } catch (err) {
-        console.error(err);
-        statusEl.innerText = "Erreur : " + (err.message || err);
-        statusEl.style.borderColor = "#ef4444";
-      }
-    }
-
-    window.sendMessage = async function(e) {
+    async function sendMessage(e) {
       if (e) e.preventDefault();
+      const apiKey = apiKeyEl.value.trim();
       const text = inputEl.value.trim();
-      if (!text || !wllama) return;
+
+      if (!apiKey) {
+        alert("Veuillez entrer une clé API Groq valide.");
+        return;
+      }
+      if (!text) return;
 
       appendMsg(text, 'user');
+      history.push({ role: "user", content: text });
+
       inputEl.value = '';
       inputEl.disabled = true;
       sendBtn.disabled = true;
+      statusEl.innerText = "Génération de la réponse...";
 
-      const botMsgEl = appendMsg("Réflexion en cours...", 'bot');
+      const botMsgEl = appendMsg("...", 'bot');
 
       try {
-        let fullResponse = "";
-        await wllama.createCompletion(text, {
-          nPredict: 512,
-          sampling: { temp: 0.7 },
-          onNewToken: (token, piece, currentText) => {
-            fullResponse = currentText;
-            botMsgEl.innerText = fullResponse;
-            chatBox.scrollTop = chatBox.scrollHeight;
-          }
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            messages: history,
+            temperature: 0.7
+          })
         });
+
+        const data = await response.json();
+
+        if (data.choices && data.choices[0]) {
+          const reply = data.choices[0].message.content;
+          botMsgEl.innerText = reply;
+          history.push({ role: "assistant", content: reply });
+          statusEl.innerText = "Prêt ! Pose ta question.";
+        } else {
+          botMsgEl.innerText = "Erreur : " + JSON.stringify(data);
+        }
       } catch (err) {
-        botMsgEl.innerText = "Erreur : " + err.message;
+        botMsgEl.innerText = "Erreur de connexion : " + err.message;
       } finally {
         inputEl.disabled = false;
         sendBtn.disabled = false;
@@ -109,17 +105,7 @@
       return div;
     }
 
-    document.getElementById('input-form').addEventListener('submit', window.sendMessage);
-    init();
+    document.getElementById('input-form').addEventListener('submit', sendMessage);
   </script>
-</head>
-<body>
-  <h1>Cephboy AI (BSN-Flash)</h1>
-  <div id="status">Initialisation...</div>
-  <div id="chat-box"></div>
-  <form id="input-form">
-    <input type="text" id="user-input" placeholder="Pose ta question..." disabled autocomplete="off">
-    <button type="submit" id="send-btn" disabled>Envoyer</button>
-  </form>
 </body>
 </html>
