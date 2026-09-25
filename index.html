@@ -38,12 +38,22 @@
 
         wllama = new Wllama(CONFIG_PATHS);
 
-        statusEl.innerText = "Téléchargement du modèle BSN-Flash (Hugging Face)...";
-        await wllama.loadModelFromUrl('https://huggingface.co/Cephboy123/bsn_flash_q4_k_m.gguf/resolve/main/bsn_flash_q4_k_m.gguf', {
+        statusEl.innerText = "Téléchargement du modèle BSN-Flash...";
+        
+        // Lien direct de téléchargement du fichier Hugging Face
+        const modelUrl = 'https://huggingface.co/Cephboy123/bsn_flash_q4_k_m.gguf/resolve/main/bsn_flash_q4_k_m.gguf';
+
+        await wllama.loadModelFromUrl(modelUrl, {
           n_threads: 1,
+          allowCrossOrigin: true,
           progressCallback: ({ loaded, total }) => {
-            const pct = Math.round((loaded / total) * 100);
-            statusEl.innerText = `Téléchargement du modèle : ${pct}%`;
+            if (total && total > 0) {
+              const pct = Math.round((loaded / total) * 100);
+              statusEl.innerText = `Téléchargement du modèle : ${pct}%`;
+            } else {
+              const mb = (loaded / (1024 * 1024)).toFixed(1);
+              statusEl.innerText = `Téléchargement : ${mb} MB`;
+            }
           }
         });
 
@@ -52,7 +62,8 @@
         inputEl.disabled = false;
         sendBtn.disabled = false;
       } catch (err) {
-        statusEl.innerText = "Erreur : " + err.message;
+        console.error(err);
+        statusEl.innerText = "Erreur : " + (err.message || err);
         statusEl.style.borderColor = "#ef4444";
       }
     }
