@@ -1,0 +1,111 @@
+cat << 'EOF' > index.html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cephboy AI - BSN Flash</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #fff; padding: 20px; max-width: 700px; margin: auto; }
+    #status { background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; }
+    #chat { height: 350px; overflow-y: auto; border: 1px solid #334155; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; }
+    .user { background: #1d4ed8; text-align: right; }
+    .bot { background: #334155; }
+    textarea { width: 100%; height: 50px; background: #1e293b; color: #fff; border: 1px solid #334155; border-radius: 6px; padding: 8px; box-sizing: border-box; }
+    button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-top: 5px; cursor: pointer; width: 100%; }
+    button:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+
+  <h2>Cephboy AI (BSN-Flash)</h2>
+  <div id="status">Statut : Chargement du moteur Wllama...</div>
+
+  <div id="chat"></div>
+
+  <textarea id="user-input" placeholder="Pose ta question..." disabled></textarea>
+  <button id="send-btn" onclick="sendMessage()" disabled>Envoyer</button>
+
+  <script type="module">
+    import { Wllama } from "https://cdn.jsdelivr.net/npm/@wllama/wllama@1.2.3/src/single-thread/wllama.js";
+
+    const MODEL_URL = "https://huggingface.co/Cephboy/BSN-Flash/resolve/main/bsn_flash_q4_k_m.gguf";
+
+    const statusDiv = document.getElementById("status");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const chatDiv = document.getElementById("chat");
+
+    let wllama;
+
+    async function init() {
+      try {
+        wllama = new Wllama({
+          "suppress-experimental-warning": true,
+          pathConfig: {
+            "wllama.wasm": "https://cdn.jsdelivr.net/npm/@wllama/wllama@1.2.3/src/single-thread/wllama.wasm"
+          }
+        });
+
+        statusDiv.innerText = "Téléchargement de BSN-Flash depuis Hugging Face...";
+
+        await wllama.loadModelFromUrl(MODEL_URL, {
+          progressCallback: ({ loaded, total }) => {
+            const pct = Math.round((loaded / total) * 100);
+            statusDiv.innerText = `Chargement du modèle : ${pct}%`;
+          }
+        });
+
+        statusDiv.innerText = "BSN-Flash est prêt ! Exécution 100% locale.";
+        userInput.disabled = false;
+        sendBtn.disabled = false;
+      } catch (err) {
+        statusDiv.innerText = "Erreur de chargement du modèle.";
+        console.error(err);
+      }
+    }
+
+    window.sendMessage = async function() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      appendMsg(text, "user");
+      userInput.value = "";
+      userInput.disabled = true;
+      sendBtn.disabled = true;
+
+      const botMsgDiv = appendMsg("...", "bot");
+
+      const prompt = `<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
+
+      let fullResponse = "";
+      await wllama.createNewCompletion(prompt, {
+        nPredict: 256,
+        sampling: { temp: 0.7 },
+        onNewToken: (token, piece) => {
+          fullResponse += piece;
+          botMsgDiv.innerText = fullResponse;
+          chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+      });
+
+      userInput.disabled = false;
+      sendBtn.disabled = false;
+    };
+
+    function appendMsg(text, sender) {
+      const div = document.createElement("div");
+      div.className = `msg ${sender}`;
+      div.innerText = text;
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    init();
+  </script>
+</body>
+</html>
+EOF
+
