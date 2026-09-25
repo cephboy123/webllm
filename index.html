@@ -66,8 +66,10 @@
           botMsgEl.innerText = reply;
           history.push({ role: "assistant", content: reply });
           statusEl.innerText = "Prêt ! Pose ta question.";
+        } else if (data.error) {
+          botMsgEl.innerText = "Erreur : " + (typeof data.error === 'object' ? (data.error.message || JSON.stringify(data.error)) : data.error);
         } else {
-          botMsgEl.innerText = "Erreur : " + (data.error || JSON.stringify(data));
+          botMsgEl.innerText = "Erreur : " + JSON.stringify(data);
         }
       } catch (err) {
         botMsgEl.innerText = "Erreur de connexion : " + err.message;
